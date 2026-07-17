@@ -67,6 +67,33 @@ class DeepSightTrainer:
             
             device = "cuda" if torch.cuda.is_available() else "cpu"
             self.on_log(f"🧠 Acelerador detectado: {device.upper()}")
+            
+            # --- Selección Inteligente de Modelo según Hardware y Modo ---
+            if getattr(sys, 'frozen', False):
+                base_path = sys._MEIPASS
+            else:
+                base_path = os.path.dirname(os.path.abspath(__file__))
+
+            if device == "cuda":
+                if self.is_deep_mode:
+                    model_filename = "yolo26s-cls.pt"
+                    self.on_log("🎮 GPU dedicada detectada + Modo Alta Precisión -> Cargando YOLO26 Small offline.")
+                else:
+                    model_filename = "yolo26n-cls.pt"
+                    self.on_log("🎮 GPU dedicada detectada + Modo Rápido -> Cargando YOLO26 Nano offline.")
+            else:
+                # En CPU priorizamos estabilidad y velocidad para evitar congelar la laptop del alumno
+                model_filename = "yolo26n-cls.pt"
+                if self.is_deep_mode:
+                    self.on_log("💻 Ejecutando en CPU -> Cargando YOLO26 Nano offline para evitar lentitud extrema.")
+                else:
+                    self.on_log("💻 Ejecutando en CPU + Modo Rápido -> Cargando YOLO26 Nano offline.")
+
+            model_path = os.path.join(base_path, model_filename)
+            if not os.path.exists(model_path):
+                self.on_log(f"⚠️ Alerta: Modelo local no encontrado en {model_path}. Se intentará descargar automáticamente.")
+                model_path = model_filename
+
             self.on_log("Iniciando entrenamiento...")
             
             # --- Ajuste Inteligente de Hiperparámetros ---
@@ -83,7 +110,7 @@ class DeepSightTrainer:
                 dropout = 0.2
                 lr0     = 0.001
 
-            model = YOLO("yolo26n-cls.pt")  # Modelo base de clasificación
+            model = YOLO(model_path)  # Carga el modelo seleccionado localmente
             model.train(
                 data=dataset_dir,
                 epochs=epochs,

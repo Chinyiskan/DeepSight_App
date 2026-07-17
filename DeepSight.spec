@@ -1,7 +1,11 @@
 # -*- mode: python ; coding: utf-8 -*-
 from PyInstaller.utils.hooks import collect_all
 
-datas = [('C:\\Users\\david\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\tkinterdnd2', 'tkinterdnd2')]
+datas = [
+    ('C:\\Users\\david\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\tkinterdnd2', 'tkinterdnd2'),
+    ('yolo26n-cls.pt', '.'),
+    ('yolo26s-cls.pt', '.')
+]
 binaries = []
 hiddenimports = []
 tmp_ret = collect_all('customtkinter')

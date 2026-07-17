@@ -344,6 +344,26 @@ class DeepSightApp(TkDnDCTk):
             except Exception as e:
                 messagebox.showerror("Error", f"Error al exportar:\n{e}")
 
+def check_zip_execution():
+    import sys
+    if getattr(sys, 'frozen', False):
+        exe_path_normalized = os.path.abspath(sys.executable).lower()
+        temp_dir = os.environ.get("TEMP", "").lower()
+        if temp_dir and temp_dir in exe_path_normalized:
+            # Crear una pequeña ventana temporal oculta para que se pueda mostrar el messagebox sin la UI principal
+            root = tk.Tk()
+            root.withdraw()
+            messagebox.showerror(
+                "Error de ejecución - ZIP detectado",
+                "¡Atención!\n\n"
+                "Estás intentando ejecutar la aplicación directamente desde el interior de un archivo ZIP sin extraer.\n\n"
+                "Por favor, cierra esta ventana, haz clic derecho sobre el archivo ZIP y selecciona \"Extraer todo...\". "
+                "Luego, abre la aplicación desde la carpeta extraída para evitar fallos de permisos y escrituras."
+            )
+            root.destroy()
+            sys.exit(1)
+
 if __name__ == "__main__":
+    check_zip_execution()
     app = DeepSightApp()
     app.mainloop()

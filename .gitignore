@@ -1,0 +1,50 @@
+# ==========================================
+# Archivos de Compilación e Instalador
+# ==========================================
+build/
+dist/
+Output/
+*.exe
+
+# ==========================================
+# Modelos de Deep Learning (Pesos)
+# ==========================================
+# Excluimos los pesos locales descargados para no llenar GitHub de binarios pesados.
+# Cualquiera puede usar `python download_weights.py` para tenerlos de vuelta.
+*.pt
+
+# ==========================================
+# Espacio de trabajo temporal del programa
+# ==========================================
+_deepsight_workspace/
+
+# ==========================================
+# Entornos virtuales de Python
+# ==========================================
+.venv/
+venv/
+ENV/
+env/
+Active/
+bin/
+Include/
+Lib/
+Share/
+pyvenv.cfg
+
+# ==========================================
+# Caché y archivos temporales de Python
+# ==========================================
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.ipynb_checkpoints/
+
+# ==========================================
+# Archivos específicos del Sistema Operativo
+# ==========================================
+Thumbs.db
+desktop.ini
+.DS_Store
