@@ -2,14 +2,16 @@
 from PyInstaller.utils.hooks import collect_all
 
 datas = [
-    ('C:\\Users\\david\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\tkinterdnd2', 'tkinterdnd2'),
+    ('web', 'web'),
     ('yolo26n-cls.pt', '.'),
     ('yolo26s-cls.pt', '.')
 ]
 binaries = []
 hiddenimports = []
-tmp_ret = collect_all('customtkinter')
+
+tmp_ret = collect_all('webview')
 datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
+
 tmp_ret = collect_all('ultralytics')
 datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
 

@@ -1,13 +1,34 @@
 import os
 import shutil
 import random
+from PIL import Image
+
+def process_and_copy_image(src_path, dst_path, max_dim=640):
+    """
+    Copia y optimiza la imagen ajustando su tamaño máximo a max_dim
+    para reducir drásticamente la carga de RAM y el tiempo de lectura en disco.
+    """
+    try:
+        with Image.open(src_path) as img:
+            # Convertir a RGB si está en RGBA/Palette
+            if img.mode in ("RGBA", "P"):
+                img = img.convert("RGB")
+            
+            # Redimensionar solo si supera la dimensión máxima
+            w, h = img.size
+            if w > max_dim or h > max_dim:
+                img.thumbnail((max_dim, max_dim), Image.Resampling.LANCZOS)
+            
+            img.save(dst_path, quality=85, optimize=True)
+    except Exception:
+        # Fallback de copia directa en caso de formato no soportado por PIL
+        try: shutil.copy(src_path, dst_path)
+        except Exception: pass
 
 def prepare_dataset_split(data_dict, tmp_dir):
     """
     Toma un diccionario de {clase: [rutas_imagenes]} y crea un dataset
-    con split automático 80/20 listos para YOLO.
-    
-    Retorna la ruta de la carpeta principal del dataset.
+    con split automático 80/20 listos para YOLO con pre-escalado de alto rendimiento.
     """
     dataset_dir = os.path.join(tmp_dir, "dataset")
     
@@ -40,14 +61,18 @@ def prepare_dataset_split(data_dict, tmp_dir):
         if not train_files: train_files = files 
         if not val_files: val_files = files 
         
-        # Copiar imágenes a train/ y renombrarlas secuencialmente
+        # Copiar y optimizar imágenes para train/
         for i, f in enumerate(train_files):
-            ext = os.path.splitext(f)[1] or '.jpg'
-            shutil.copy(f, os.path.join(c_train, f"img_{i}{ext}"))
+            ext = os.path.splitext(f)[1].lower()
+            if ext not in ['.jpg', '.jpeg', '.png', '.webp']:
+                ext = '.jpg'
+            process_and_copy_image(f, os.path.join(c_train, f"img_{i}{ext}"))
             
-        # Copiar imágenes a val/ y renombrarlas secuencialmente    
+        # Copiar y optimizar imágenes para val/    
         for i, f in enumerate(val_files):
-            ext = os.path.splitext(f)[1] or '.jpg'
-            shutil.copy(f, os.path.join(c_val, f"img_{i}{ext}"))
+            ext = os.path.splitext(f)[1].lower()
+            if ext not in ['.jpg', '.jpeg', '.png', '.webp']:
+                ext = '.jpg'
+            process_and_copy_image(f, os.path.join(c_val, f"img_{i}{ext}"))
             
     return dataset_dir

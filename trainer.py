@@ -2,10 +2,37 @@ import os
 import threading
 import torch
 import sys
+import gc
 from ultralytics import YOLO
 
 # Importamos las herramientas de nuestro nuevo utils.py
 from utils import prepare_dataset_split
+
+def get_ram_gb():
+    try:
+        import psutil
+        return psutil.virtual_memory().total / (1024 ** 3)
+    except Exception:
+        try:
+            import ctypes
+            class MEMORYSTATUSEX(ctypes.Structure):
+                _fields_ = [
+                    ('dwLength', ctypes.c_ulong),
+                    ('dwMemoryLoad', ctypes.c_ulong),
+                    ('ullTotalPhys', ctypes.c_ulonglong),
+                    ('ullAvailPhys', ctypes.c_ulonglong),
+                    ('ullTotalPageFile', ctypes.c_ulonglong),
+                    ('ullAvailPageFile', ctypes.c_ulonglong),
+                    ('ullTotalVirtual', ctypes.c_ulonglong),
+                    ('ullAvailVirtual', ctypes.c_ulonglong),
+                    ('sullAvailExtendedVirtual', ctypes.c_ulonglong),
+                ]
+            stat = MEMORYSTATUSEX()
+            stat.dwLength = ctypes.sizeof(MEMORYSTATUSEX)
+            ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(stat))
+            return stat.ullTotalPhys / (1024 ** 3)
+        except Exception:
+            return 8.0
 
 class PrintLogger:
     def __init__(self, callback):
@@ -38,8 +65,9 @@ class DeepSightTrainer:
         self.on_finish = on_finish
         self.is_deep_mode = is_deep_mode
         
-        # Rutas de trabajo limitadas
-        self.tmp_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "_deepsight_workspace")
+        # Guardar workspace en %LOCALAPPDATA% para garantizar permisos de escritura sin requerir Administrador
+        local_appdata = os.environ.get("LOCALAPPDATA", os.path.expanduser("~"))
+        self.tmp_dir = os.path.join(local_appdata, "DeepSight", "_deepsight_workspace")
         self.runs_dir = os.path.join(self.tmp_dir, "runs")
         self.is_running = False
         
@@ -60,15 +88,23 @@ class DeepSightTrainer:
         
         try:
             self.on_log("Preparando imágenes y aplicando auto-split 80/20...")
-            # Aquí usamos utils.py, dejando trainer.py mucho más limpio
             dataset_dir = prepare_dataset_split(self.data_dict, self.tmp_dir)
             
             self.on_log("¡Imágenes listas!")
             
             device = "cuda" if torch.cuda.is_available() else "cpu"
-            self.on_log(f"🧠 Acelerador detectado: {device.upper()}")
+            cpus = os.cpu_count() or 2
+            ram_gb = get_ram_gb()
+            self.on_log(f"🧠 Acelerador detectado: {device.upper()} | CPUs: {cpus} | RAM: ~{ram_gb:.1f} GB")
             
-            # --- Selección Inteligente de Modelo según Hardware y Modo ---
+            # --- Configuración inteligente de hilos CPU ---
+            if device == "cpu":
+                # Limitar hilos CPU a máximo 4 para evitar estrangulamiento térmico en laptops y dejar hilos a la UI
+                num_threads = min(4, max(1, cpus - 1))
+                torch.set_num_threads(num_threads)
+                self.on_log(f"⚙️ Asignados {num_threads} hilos de CPU a PyTorch (optimizado para mantener la interfaz ultra fluida).")
+
+            # --- Selección Inteligente de Modelo, Lote y Resolución según Hardware y Modo ---
             if getattr(sys, 'frozen', False):
                 base_path = sys._MEIPASS
             else:
@@ -81,6 +117,8 @@ class DeepSightTrainer:
                 else:
                     model_filename = "yolo26n-cls.pt"
                     self.on_log("🎮 GPU dedicada detectada + Modo Rápido -> Cargando YOLO26 Nano offline.")
+                batch_size = 8
+                img_size = 224
             else:
                 # En CPU priorizamos estabilidad y velocidad para evitar congelar la laptop del alumno
                 model_filename = "yolo26n-cls.pt"
@@ -88,6 +126,15 @@ class DeepSightTrainer:
                     self.on_log("💻 Ejecutando en CPU -> Cargando YOLO26 Nano offline para evitar lentitud extrema.")
                 else:
                     self.on_log("💻 Ejecutando en CPU + Modo Rápido -> Cargando YOLO26 Nano offline.")
+                
+                # Ajuste ligero de lote y resolución adaptativa para velocidad extrema en CPU
+                if ram_gb <= 8.0 or cpus <= 2:
+                    batch_size = 4
+                    img_size = 160
+                    self.on_log("⚡ Perfil Ultra-Ligero activado (RAM <= 8GB / CPU Modesto): Lote = 4, Res = 160px.")
+                else:
+                    batch_size = 8
+                    img_size = 224
 
             model_path = os.path.join(base_path, model_filename)
             if not os.path.exists(model_path):
@@ -110,12 +157,14 @@ class DeepSightTrainer:
                 dropout = 0.2
                 lr0     = 0.001
 
-            model = YOLO(model_path)  # Carga el modelo seleccionado localmente
+            # workers=0 es VITAL en Windows empaquetado con PyInstaller para evitar bloqueos e IPC deadlocks
+            model = YOLO(model_path)
             model.train(
                 data=dataset_dir,
                 epochs=epochs,
-                imgsz=224,
-                batch=8,
+                imgsz=img_size,
+                batch=batch_size,
+                workers=0,
                 patience=15,
                 device=device,
                 project=self.runs_dir,
@@ -145,8 +194,12 @@ class DeepSightTrainer:
         except Exception as e:
             self.on_log(f"\n❌ Se produjo un error crítico: {e}")
         finally:
-            # Siempre se debe restaurar la consola al final
+            # Siempre restaurar la consola y realizar limpieza de memoria
             sys.stdout = self.original_stdout
             sys.stderr = self.original_stderr
             self.is_running = False
+            gc.collect()
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
             self.on_finish(best_pt_path)
+
