@@ -1,7 +1,10 @@
 import os
+import sys
+os.environ["ULTRALYTICS_AUTO_INSTALL"] = "0"
+os.environ["YOLO_VERBOSE"] = "False"
+
 import threading
 import torch
-import sys
 import gc
 from ultralytics import YOLO
 
@@ -157,7 +160,7 @@ class DeepSightTrainer:
                 dropout = 0.2
                 lr0     = 0.001
 
-            # workers=0 es VITAL en Windows empaquetado con PyInstaller para evitar bloqueos e IPC deadlocks
+            # workers=0 y amp=False son VITALES en Windows empaquetado con PyInstaller para evitar subprocesos e IPC deadlocks
             model = YOLO(model_path)
             model.train(
                 data=dataset_dir,
@@ -165,6 +168,7 @@ class DeepSightTrainer:
                 imgsz=img_size,
                 batch=batch_size,
                 workers=0,
+                amp=False,
                 patience=15,
                 device=device,
                 project=self.runs_dir,

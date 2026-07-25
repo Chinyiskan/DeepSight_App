@@ -17,7 +17,7 @@ Output/
 # Espacio de trabajo temporal del programa
 # ==========================================
 _deepsight_workspace/
-
+comandos.txt
 # ==========================================
 # Entornos virtuales de Python
 # ==========================================
